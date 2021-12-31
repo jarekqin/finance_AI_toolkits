@@ -320,6 +320,86 @@ def MAC_Duration(fv,par,frequency,ytm,time):
         duration=np.sum(time*weight)
     return duration
 
+def Modified_Duration(fv,par,frequency1,frequency2,ytm,time):
+    """
+    calculate single bond modified duration
+    :param fv: face value
+    :param par: par value
+    :param frequency: payoff frequency
+    :param ytm: yield to maturity
+    :param time: time period
+    :param time2: time2 period
+    :return: mac duration
+    """
+    mac_duration=MAC_Duration(fv,par,frequency1,ytm,time)
+    return mac_duration/(1+ytm/frequency2)
+
+def Dollar_Duration(fv,par,frequency1,frequency2,ytm,time):
+    """
+    calculate single bond dollar duration
+    :param fv: face value
+    :param par: par value
+    :param frequency: payoff frequency
+    :param ytm: yield to maturity
+    :param time: time period
+    :param time2: time2 period
+    :return: mac duration
+    """
+    r=frequency2*np.log(1+ytm/frequency2)
+    if fv==0:
+        price=par*np.exp(-r*time)
+        mac_duration=time
+    else:
+        coupon=np.ones_like(time)*par*fv/frequency1
+        npv_coupon=np.sum(coupon*np.exp(-r*time))
+        npv_par=par*np.exp(-r*time[-1]) if len(time)>1 else par*np.exp(-r*time)
+        price=npv_par+npv_coupon
+        cashflow=coupon
+        if len(cashflow)>1:
+            cashflow[-1]=par*(1+fv/frequency1)
+        weight=cashflow*np.exp(-r*time)/price
+        mac_duration=np.sum(time*weight)
+    modified_duration=mac_duration/(1+ytm/frequency2)
+    return price*modified_duration
+
+def Convexity(fv,par,frequency,ytm,time):
+    """
+    calculate single bond convexity
+    :param fv: face value
+    :param par: par value
+    :param frequency: payoff frequency
+    :param ytm: yield to maturity
+    :param time: time period
+    :return: mac duration
+    """
+    if fv==0:
+        convexity=time
+    else:
+        coupon=np.ones_like(time)*par*fv/frequency
+        npv_coupon=np.sum(coupon*np.exp(-ytm*time))
+        npv_par=par*np.exp(-ytm*time[-1]) if len(time)>1 else par*np.exp(-ytm*time)
+        bond_value=npv_par+npv_coupon
+        cashflow=coupon
+        if len(cashflow)>1:
+            cashflow[-1]=par*(1+fv/frequency)
+        else:
+            cashflow = par * (1 + fv / frequency)
+        weight=cashflow*np.exp(-ytm*time)/bond_value
+        convexity=np.sum(pow(time,2)*weight)
+    return convexity
+
+def default_prob(y1,y2,rate_of_default,time):
+    """
+    calculate probability of bond
+    :param y1: ytm on time 1
+    :param y2: ytm on time 2
+    :param rate_of_default: raate of default
+    :param time: time period
+    :return: probability
+    """
+    A=(np.exp(-y2*time)-rate_of_default*np.exp(-y1*time))/(1-rate_of_default)
+    prob=-np.log(A)/time-y1
+    return prob
 
 def cal_Maculay_duration(par_value, payoff_freq, ytm, t0, t1):
     """
@@ -596,3 +676,10 @@ if __name__ == '__main__':
     list1=np.arange(1,2*4+1)/2
     print(MAC_Duration(0.0369,100,2,0.024,list1))
     print('-' * 50, 'beautifully color line', '-' * 50)
+    print(Modified_Duration(0.0369,100,2,2,0.024145,list1))
+    print('-' * 50, 'beautifully color line', '-' * 50)
+    print(Dollar_Duration(0.0369,100,2,2,0.024145,list1))
+    print('-' * 50, 'beautifully color line', '-' * 50)
+    print(Convexity(0.0369,100,2,0.024145,list1))
+    print('-' * 50, 'beautifully color line', '-' * 50)
+    print(default_prob(0.02922,0.073611,0.381,3))
