@@ -294,6 +294,32 @@ def cal_ytm(bond_price,face_rate,par,frequency,maturity):
     else:
         return so.fsolve(func=f,x0=0.1)[0]
 
+def MAC_Duration(fv,par,frequency,ytm,time):
+    """
+    calculate single bond mac duration
+    :param fv: face value
+    :param par: par value
+    :param frequency: payoff frequency
+    :param ytm: yield to maturity
+    :param time: time period
+    :return: mac duration
+    """
+    if fv==0:
+        duration=time
+    else:
+        coupon=np.ones_like(time)*par*fv/frequency
+        npv_coupon=np.sum(coupon*np.exp(-ytm*time))
+        npv_par=par*np.exp(-ytm*time[-1]) if len(time)>1 else par*np.exp(-ytm*time)
+        bond_value=npv_par+npv_coupon
+        cashflow=coupon
+        if len(cashflow)>1:
+            cashflow[-1]=par*(1+fv/frequency)
+        else:
+            cashflow = par * (1 + fv / frequency)
+        weight=cashflow*np.exp(-ytm*time)/bond_value
+        duration=np.sum(time*weight)
+    return duration
+
 
 def cal_Maculay_duration(par_value, payoff_freq, ytm, t0, t1):
     """
@@ -566,3 +592,7 @@ if __name__ == '__main__':
     print(bond_price_one_discount(0, 100, 0, 0.01954, 0.5))
     print('-' * 50, 'beautifully color line', '-' * 50)
     print(cal_ytm(104.802,0.0369,100,2,np.arange(1,2*4+1)/2))
+    print('-' * 50, 'beautifully color line', '-' * 50)
+    list1=np.arange(1,2*4+1)/2
+    print(MAC_Duration(0.0369,100,2,0.024,list1))
+    print('-' * 50, 'beautifully color line', '-' * 50)
