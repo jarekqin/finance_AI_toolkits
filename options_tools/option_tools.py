@@ -92,9 +92,9 @@ def BSM(s, k, sigma, r, t0, t1, types):
     return options_price
 
 
-def options_letters(s, k, sigma, r, t0, t1, letter, types):
+def eu_options_letters(s, k, sigma, r, t0, t1, letter, types):
     """
-    calculate options price with BSM model
+    calculate eu options price with BSM model
     :param s: underlying price
     :param k: strike price
     :param sigma: underlying returns volatility
@@ -163,6 +163,160 @@ def best_hedged_ratio(hedge_ratio, asset_price, futures_contract_fv):
     return N
 
 
+def options_parity(call_price, put_price, underlying_price, strike_price, risk_free, maturity, option_type):
+    """
+    calculate options parity
+    :param call_price: call options price
+    :param put_price: put options price
+    :param underlying_price: underlying price
+    :param strike_price: strike price on options
+    :param risk_free: risk free rate
+    :param maturity: maturity of options
+    :param option_type: options type only supports "call"/"put" lower letter
+    :return: equitum value
+    """
+    if option_type == 'call':
+        return put_price + underlying_price - strike_price * np.exp(-risk_free * maturity)
+    else:
+        return call_price + strike_price * np.exp(-risk_free * maturity) - underlying_price
+
+
+def binary_tree_eu_options_cal(underlying_price, strike_price, sigma, risk_free, maturity, steps, options_type):
+    """
+    binary tree eu options calculator
+    :param underlying_price: underlying price
+    :param strike_price: strike price on options
+    :param sigma: volatility on underlying
+    :param risk_free: risk free rate
+    :param maturity: maturity on options
+    :param steps: simulation steps
+    :param options_type: options type only supports "call"/"put"
+    :return: options value
+    """
+    from math import factorial
+    t = maturity / steps
+    u = np.exp(sigma * np.sqrt(t))
+    d = 1 / u
+    p = (np.exp(risk_free * t) - d) / (u - d)
+    n_list = range(0, steps + 1)
+    A = []
+    for i in n_list:
+        c_nj = np.maximum(underlying_price * pow(u, i) * pow(d, steps - i) - strike_price, 0)
+        num = factorial(steps) / (factorial(i) * factorial(steps - i))
+        A.append(num * pow(p, i) * pow(1 - p, steps - i) * c_nj)
+    if options_type == 'call':
+        return np.exp(-risk_free * maturity) * np.sum(A)
+    elif options_type == 'put':
+        return np.exp(-risk_free * maturity) * np.sum(A) + strike_price * np.exp(
+            -risk_free * maturity) - underlying_price
+
+
+def binary_tree_us_options_cal(underlying_price, strike_price, sigma, risk_free, maturity, steps, options_type,
+                               return_letters=True, position='long'):
+    """
+    binary tree eu options calculator
+    :param underlying_price: underlying price
+    :param strike_price: strike price on options
+    :param sigma: volatility on underlying
+    :param risk_free: risk free rate
+    :param maturity: maturity on options
+    :param steps: simulation steps
+    :param options_type: options type only supports "call"/"put"
+    :param return_letters: whether return Greek letters
+    :param position: holding options direction
+    :return: options value
+    """
+    from math import factorial
+    t = maturity / steps
+    u = np.exp(sigma * np.sqrt(t))
+    d = 1 / u
+    p = (np.exp(risk_free * t) - d) / (u - d)
+    options_matrix = np.zeros((steps + 1, steps + 1))
+    n_list = np.arange(0, steps + 1)
+    s_end = underlying_price * pow(u, steps - n_list) * pow(d, n_list)
+    if options_type == 'call':
+        options_matrix[:, -1] = np.maximum(s_end - strike_price, 0)
+        i_list = list(range(0, steps))
+        i_list.reverse()
+        for i in i_list:
+            j_list = np.arange(i + 1)
+            si = underlying_price * pow(u, i - j_list) * pow(d, j_list)
+            call_strike = np.maximum(si - strike_price, 0)
+            call_nostrike = (p * options_matrix[:i + 1, i + 1] + (1 - p) * options_matrix[1:i + 2, i + 1]) * \
+                            np.exp(-risk_free * t)
+            options_matrix[:i + 1, i] = np.maximum(call_strike, call_nostrike)
+        if return_letters:
+            greek = {}
+            delta_ = (options_matrix[0, 1] - options_matrix[1, 1]) / (underlying_price * u - underlying_price * d)
+            gamma_delta_1 = (options_matrix[0, 2] - options_matrix[1, 2]) / (
+                    underlying_price * pow(u, 2) - underlying_price)
+            gamma_delta_2 = (options_matrix[1, 2] - options_matrix[2, 2]) / (
+                    underlying_price - underlying_price * pow(d, 2))
+            gamma_ = 2 * (gamma_delta_1 - gamma_delta_2) / (underlying_price * pow(u, 2) - underlying_price * pow(d, 2))
+            theta_ = (options_matrix[1, 2] - options_matrix[0, 0]) / (2 * t)
+            vega_ = (binary_tree_us_options_cal(underlying_price, strike_price, sigma + 1e-4,
+                                                risk_free,
+                                                maturity, steps, options_type,
+                                                False, position) - options_matrix[0, 0]) / 1e-4
+            rho_ = (binary_tree_us_options_cal(underlying_price, strike_price, sigma,
+                                               risk_free + 1e-4,
+                                               maturity, steps, options_type,
+                                               False, position) - options_matrix[0, 0]) / 1e-4
+            if position == 'long':
+                greek['delta'] = delta_
+            elif position == 'short':
+                greek['delta'] = -delta_
+            else:
+                raise TypeError('wrong position value,only supporting "long/short"!')
+            greek['gamma'] = gamma_
+            greek['theta'] = theta_
+            greek['vega'] = vega_
+            greek['rho'] = rho_
+            return options_matrix[0, 0], greek
+        else:
+            return options_matrix[0, 0]
+    elif options_type == 'put':
+        options_matrix[:, -1] = np.maximum(strike_price - s_end, 0)
+        i_list = list(range(0, steps))
+        i_list.reverse()
+        for i in i_list:
+            j_list = np.arange(i + 1)
+            si = underlying_price * pow(u, i - j_list) * pow(d, j_list)
+            put_strike = np.maximum(strike_price - si, 0)
+            put_nostrike = np.exp(-risk_free * t) * (
+                    p * options_matrix[:i + 1, i + 1] + (1 - p) * options_matrix[1:i + 2, i + 1])
+            options_matrix[:i + 1, i] = np.maximum(put_strike, put_nostrike)
+        if return_letters:
+            greek = {}
+            delta_ = (options_matrix[0, 1] - options_matrix[1, 1]) / (underlying_price * u - underlying_price * d)
+            gamma_delta_1 = (options_matrix[0, 2] - options_matrix[1, 2]) / (
+                    underlying_price * pow(u, 2) - underlying_price)
+            gamma_delta_2 = (options_matrix[1, 2] - options_matrix[2, 2]) / (
+                    underlying_price - underlying_price * pow(d, 2))
+            gamma_ = 2 * (gamma_delta_1 - gamma_delta_2) / (underlying_price * pow(u, 2) - underlying_price * pow(d, 2))
+            theta_ = (options_matrix[1, 2] - options_matrix[0, 0]) / (2 * t)
+            vega_ = (binary_tree_us_options_cal(underlying_price, strike_price, sigma + 1e-4,
+                                                risk_free,
+                                                maturity, steps, options_type,
+                                                False, position) - options_matrix[0, 0]) / 1e-4
+            rho_ = (binary_tree_us_options_cal(underlying_price, strike_price, sigma,
+                                               risk_free + 1e-4,
+                                               maturity, steps, options_type,
+                                               False, position) - options_matrix[0, 0]) / 1e-4
+            if position == 'long':
+                greek['delta'] = delta_
+            elif position == 'short':
+                greek['delta'] = -delta_
+            else:
+                raise TypeError('wrong position value,only supporting "long/short"!')
+            greek['gamma'] = gamma_
+            greek['theta'] = theta_
+            greek['vega'] = vega_
+            greek['rho'] = rho_
+            return options_matrix[0, 0], greek
+        else:
+            return options_matrix[0, 0]
+
 
 if __name__ == '__main__':
     print('call options price: ', BSM(325, 350, 0.291239, 0.0231393, '2019-10-02', '2020-04-02', 'call'))
@@ -178,35 +332,46 @@ if __name__ == '__main__':
     k_put = 2.8
     risk_free = 0.02708
 
-    print(options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'delta', 'call'))
-    print(options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'gamma', 'call'))
-    print(options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'vega', 'call'))
-    print(options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'theta', 'call'))
-    print(options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'rho', 'call'))
+    print(eu_options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'delta', 'call'))
+    print(eu_options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'gamma', 'call'))
+    print(eu_options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'vega', 'call'))
+    print(eu_options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'theta', 'call'))
+    print(eu_options_letters(underlying_price, k_call, vol, risk_free, t_cal, t_maturity_call, 'rho', 'call'))
 
     print('*' * 50, 'beautiful line', '*' * 50)
-    print(options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'delta', 'put'))
-    print(options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'gamma', 'put'))
-    print(options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'vega', 'put'))
-    print(options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'theta', 'put'))
-    print(options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'rho', 'put'))
+    print(eu_options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'delta', 'put'))
+    print(eu_options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'gamma', 'put'))
+    print(eu_options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'vega', 'put'))
+    print(eu_options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'theta', 'put'))
+    print(eu_options_letters(underlying_price, k_put, vol, risk_free, t_cal, t_maturity_put, 'rho', 'put'))
 
     print('*' * 50, 'beautiful line', '*' * 50)
     print(best_hedged_ratio(1, 22650000, 300 * 1000))
 
     print('*' * 50, 'beautiful line', '*' * 50)
     from datetime import datetime
-    p_etf_apr25=2.913
-    shibor_apr25=0.0288
-    t_calculate=datetime(2019,4,25)
-    t_mature=datetime(2019,12,25)
 
-    k_c28=2.8
-    k_c30=3.0
-    k_c32=3.2
+    p_etf_apr25 = 2.913
+    shibor_apr25 = 0.0288
+    t_calculate = datetime(2019, 4, 25)
+    t_mature = datetime(2019, 12, 25)
 
-    p_c28_apr25=0.3432
-    p_c30=apr25=0.2438
-    p_c32_apr25=0.1688
+    k_c28 = 2.8
+    k_c30 = 3.0
+    k_c32 = 3.2
 
-    print(implied_volatility(p_c28_apr25,p_etf_apr25,k_c28,shibor_apr25,t_calculate,t_mature,'call'))
+    p_c28_apr25 = 0.3432
+    p_c30 = apr25 = 0.2438
+    p_c32_apr25 = 0.1688
+
+    print(implied_volatility(p_c28_apr25, p_etf_apr25, k_c28, shibor_apr25, t_calculate, t_mature, 'call'))
+    print('*' * 50, 'beautiful line', '*' * 50)
+    print(options_parity(0.15, 0.3, 5.0, 5.2, 0.02601, 3 / 12, "call"))
+    print('*' * 50, 'beautiful line', '*' * 50)
+    print(binary_tree_eu_options_cal(6.32, 6.6, 0.2538, 0.0228, 1, 250, 'call'))
+    print('*' * 50, 'beautiful line', '*' * 50)
+    print(binary_tree_us_options_cal(3.5, 3.8, 0.1676, 0.02, 1, 252, 'put'))
+    print(binary_tree_us_options_cal(3.5, 3.8, 0.1676, 0.02, 1, 252, 'call'))
+    print('*' * 50, 'beautiful line', '*' * 50)
+    print(binary_tree_us_options_cal(3.27, 3.6, 0.19, 0.02377, 0.5, 100, 'call', 'long'))
+    print(binary_tree_us_options_cal(3.27, 3.6, 0.19, 0.02377, 0.5, 100, 'put', 'short'))
