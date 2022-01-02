@@ -211,8 +211,9 @@ def binary_tree_eu_options_cal(underlying_price, strike_price, sigma, risk_free,
             -risk_free * maturity) - underlying_price
 
 
-def binary_tree_us_options_cal(underlying_price, strike_price, sigma, risk_free, maturity, steps, options_type,
-                               return_letters=True, position='long'):
+def binary_tree_us_options_cal_and_letters(underlying_price, strike_price, sigma, risk_free, maturity, steps,
+                                           options_type,
+                                           return_letters=True, position='long'):
     """
     binary tree eu options calculator
     :param underlying_price: underlying price
@@ -254,11 +255,11 @@ def binary_tree_us_options_cal(underlying_price, strike_price, sigma, risk_free,
                     underlying_price - underlying_price * pow(d, 2))
             gamma_ = 2 * (gamma_delta_1 - gamma_delta_2) / (underlying_price * pow(u, 2) - underlying_price * pow(d, 2))
             theta_ = (options_matrix[1, 2] - options_matrix[0, 0]) / (2 * t)
-            vega_ = (binary_tree_us_options_cal(underlying_price, strike_price, sigma + 1e-4,
+            vega_ = (binary_tree_us_options_cal_and_letters(underlying_price, strike_price, sigma + 1e-4,
                                                 risk_free,
                                                 maturity, steps, options_type,
                                                 False, position) - options_matrix[0, 0]) / 1e-4
-            rho_ = (binary_tree_us_options_cal(underlying_price, strike_price, sigma,
+            rho_ = (binary_tree_us_options_cal_and_letters(underlying_price, strike_price, sigma,
                                                risk_free + 1e-4,
                                                maturity, steps, options_type,
                                                False, position) - options_matrix[0, 0]) / 1e-4
@@ -295,11 +296,11 @@ def binary_tree_us_options_cal(underlying_price, strike_price, sigma, risk_free,
                     underlying_price - underlying_price * pow(d, 2))
             gamma_ = 2 * (gamma_delta_1 - gamma_delta_2) / (underlying_price * pow(u, 2) - underlying_price * pow(d, 2))
             theta_ = (options_matrix[1, 2] - options_matrix[0, 0]) / (2 * t)
-            vega_ = (binary_tree_us_options_cal(underlying_price, strike_price, sigma + 1e-4,
+            vega_ = (binary_tree_us_options_cal_and_letters(underlying_price, strike_price, sigma + 1e-4,
                                                 risk_free,
                                                 maturity, steps, options_type,
                                                 False, position) - options_matrix[0, 0]) / 1e-4
-            rho_ = (binary_tree_us_options_cal(underlying_price, strike_price, sigma,
+            rho_ = (binary_tree_us_options_cal_and_letters(underlying_price, strike_price, sigma,
                                                risk_free + 1e-4,
                                                maturity, steps, options_type,
                                                False, position) - options_matrix[0, 0]) / 1e-4
@@ -370,8 +371,8 @@ if __name__ == '__main__':
     print('*' * 50, 'beautiful line', '*' * 50)
     print(binary_tree_eu_options_cal(6.32, 6.6, 0.2538, 0.0228, 1, 250, 'call'))
     print('*' * 50, 'beautiful line', '*' * 50)
-    print(binary_tree_us_options_cal(3.5, 3.8, 0.1676, 0.02, 1, 252, 'put'))
-    print(binary_tree_us_options_cal(3.5, 3.8, 0.1676, 0.02, 1, 252, 'call'))
+    print(binary_tree_us_options_cal_and_letters(3.5, 3.8, 0.1676, 0.02, 1, 252, 'put'))
+    print(binary_tree_us_options_cal_and_letters(3.5, 3.8, 0.1676, 0.02, 1, 252, 'call'))
     print('*' * 50, 'beautiful line', '*' * 50)
-    print(binary_tree_us_options_cal(3.27, 3.6, 0.19, 0.02377, 0.5, 100, 'call', 'long'))
-    print(binary_tree_us_options_cal(3.27, 3.6, 0.19, 0.02377, 0.5, 100, 'put', 'short'))
+    print(binary_tree_us_options_cal_and_letters(3.27, 3.6, 0.19, 0.02377, 0.5, 100, 'call', 'long'))
+    print(binary_tree_us_options_cal_and_letters(3.27, 3.6, 0.19, 0.02377, 0.5, 100, 'put', 'short'))
