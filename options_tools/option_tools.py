@@ -209,6 +209,8 @@ def binary_tree_eu_options_cal(underlying_price, strike_price, sigma, risk_free,
     elif options_type == 'put':
         return np.exp(-risk_free * maturity) * np.sum(A) + strike_price * np.exp(
             -risk_free * maturity) - underlying_price
+    else:
+        raise TypeError('options_type only supports "call/put" with lower letters!')
 
 
 def binary_tree_us_options_cal_and_letters(underlying_price, strike_price, sigma, risk_free, maturity, steps,
