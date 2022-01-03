@@ -17,7 +17,7 @@ def cds_spread(Lambda,recover_rate,zero_rate,contract_maturity,frequency):
     spread=frequency*(1-recover_rate)*(a/b-1)
     return spread
 
-def cds_cashflow(spread,frequency,t1,t2,principle,recovery_rate,trader,event=False):
+def cds_cashflow(spread,frquency,t1,t2,principle,recovery_rate,trader,event=False):
     """
     calculate cds cashflow
     :param spread: spread on cds
